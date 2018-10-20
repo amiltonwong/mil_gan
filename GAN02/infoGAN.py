@@ -10,11 +10,11 @@ from utils import *
 
 class infoGAN(object):
     model_name = "infoGAN"     # name for checkpoint
-
+    # constructor: set hyper-parameters
     def __init__(self, sess, epoch, batch_size, z_dim, dataset_name, checkpoint_dir, result_dir, log_dir, SUPERVISED=True):
-        self.sess = sess
+        self.sess = sess # sess 可在constructor設定
         self.dataset_name = dataset_name
-        self.checkpoint_dir = checkpoint_dir
+        self.checkpoint_dir = checkpoint_dir # store trained model file in XX format
         self.result_dir = result_dir
         self.log_dir = log_dir
         self.epoch = epoch
@@ -23,60 +23,67 @@ class infoGAN(object):
         if dataset_name == 'mnist' or dataset_name == 'fashion-mnist':
             # parameters
             self.input_height = 28
-            self.input_width = 28.
+            self.input_width = 28
             self.output_height = 28
             self.output_width = 28
 
-            self.z_dim = z_dim         # dimension of noise-vector
-            self.y_dim = 12         # dimension of code-vector (label+two features)
-            self.c_dim = 1       # channel
+            self.z_dim = z_dim   # dimension of noise-vector
+            self.y_dim = 12      # dimension of code-vector (label+two features), 相當於講義的控制變量c
+            self.c_dim = 1       # channel, gray-scale as 1 dim
 
             # code
-            self.len_discrete_code = 10  # categorical distribution (i.e. label)
+            self.len_discrete_code = 10  # categorical distribution (i.e. label), 10-dim one-hot encoding label
             self.len_continuous_code = 2  # gaussian distribution (e.g. rotation, thickness)
             
             self.SUPERVISED = SUPERVISED # if it is true, label info is directly used for code
 
             # train
             self.learning_rate = 0.0002
-            self.beta1 = 0.5
+            self.beta1 = 0.5 # momentum factor
 
             # test
             self.sample_num = 64  # number of generated images to be saved
 
-            # load mnist
+            # load mnist, 在constructor中先創建好 data_X, data_y
             self.data_X, self.data_y = load_mnist(self.dataset_name)
 
             # get number of batches for a single epoch
             self.num_batches = len(self.data_X) // self.batch_size
         else:
-            raise NotImplementedError
+            raise NotImplementedError # to implement for other dataset
 
     def generator(self, z, y, is_training=True, reuse=False):
+        """ arguments: y: contol variable / code vector
+                       z: random noise
+                       reuse: whether parameters are shared
+
+        """
         # [batch_size, z_dim+y_dim] > [batch_size, 1024] > [batch_size, 128*7*7] > 
         # [batch_size, 7, 7, 128] > [batch_size, 14, 14, 64] > [batch_size, 28, 28, 1]
         with tf.variable_scope("generator", reuse=reuse):
 
             # merge noise and code
-            z = concat([z, y], 1)
+            z = concat([z, y], 1) # use tf.concat()
 
-            net = tf.nn.relu(bn(linear(z, 1024, scope='g_fc1'), is_training=is_training, scope='g_bn1'))
+            net = tf.nn.relu(bn(linear(input_=z, output_size=1024, scope='g_fc1'), is_training=is_training, scope='g_bn1')) # linear() use tf.matmul()
             net = tf.nn.relu(bn(linear(net, 128 * 7 * 7, scope='g_fc2'), is_training=is_training, scope='g_bn2'))
-            net = tf.reshape(net, [self.batch_size, 7, 7, 128])
+            net = tf.reshape(net, [self.batch_size, 7, 7, 128]) # reshape into 4-dim, for later deconvolution use
             net = tf.nn.relu(
                 bn(deconv2d(net, [self.batch_size, 14, 14, 64], 4, 4, 2, 2, name='g_dc3'), is_training=is_training,
-                   scope='g_bn3'))
+                   scope='g_bn3')) # 4x4 kernel, stride: (2,2)
 
             out = tf.nn.sigmoid(deconv2d(net, [self.batch_size, 28, 28, 1], 4, 4, 2, 2, name='g_dc4'))
 
             return out
 
     def discriminator(self, x, is_training=True, reuse=False):
+        """ arguments: x: real data / generated data
+        """
         with tf.variable_scope("discriminator", reuse=reuse):
 
-            net = lrelu(conv2d(x, 64, 4, 4, 2, 2, name='d_conv1'))
+            net = lrelu(conv2d(x, 64, 4, 4, 2, 2, name='d_conv1')) # use leaky-relu: lrelu()
             net = lrelu(bn(conv2d(net, 128, 4, 4, 2, 2, name='d_conv2'), is_training=is_training, scope='d_bn2'))
-            net = tf.reshape(net, [self.batch_size, -1])
+            net = tf.reshape(net, [self.batch_size, -1]) # flatten into 1-dim vector
             net = lrelu(bn(linear(net, 1024, scope='d_fc3'), is_training=is_training, scope='d_bn3'))
             out_logit = linear(net, 1, scope='d_fc4')
             out = tf.nn.sigmoid(out_logit)
@@ -94,7 +101,7 @@ class infoGAN(object):
 
             return out, out_logit
 
-    def build_model(self):
+    def build_model(self): # creation for graph
         # some parameters
         image_dims = [self.input_height, self.input_width, self.c_dim]
         bs = self.batch_size
@@ -111,7 +118,9 @@ class infoGAN(object):
 
         """ Loss Function """
         ## 1. GAN Loss
-        # output of D for real images
+        # output of D for real images (self.inputs)
+        # D_real_logits 是沒經sigmoid激活函數, as score
+        # D_real 是經sigmoid激活函數後, as prob.
         D_real, D_real_logits, _ = self.discriminator(self.inputs, is_training=True, reuse=False)
 
         # output of D for fake images
@@ -119,11 +128,12 @@ class infoGAN(object):
         D_fake, D_fake_logits, input4classifier_fake = self.discriminator(G, is_training=True, reuse=True)
 
         # get loss for discriminator(交叉熵)" -[log(D(x)) - log(1-D(G(z,y)))] "
-        d_loss_real = tf.reduce_mean(
+        d_loss_real = tf.reduce_mean( # average for batch_size
+            # sigmoid_cross_entropy_with_logits() 是把logits先經sigmoid激活函數， 再計算cross-entropy
             tf.nn.sigmoid_cross_entropy_with_logits(logits=D_real_logits, labels=tf.ones_like(D_real)))
-        d_loss_fake = tf.reduce_mean(
+        d_loss_fake = tf.reduce_mean( # average for batch_size
             tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake_logits, labels=tf.zeros_like(D_fake)))
-
+        # d_loss_real 即 -log(D(x)), d_loss_fake 即 log(1-D(G(z,y)))
         self.d_loss = d_loss_real + d_loss_fake
 
         # get loss for generator(交叉熵)" -log(D(G(z,y))) "
@@ -181,7 +191,7 @@ class infoGAN(object):
         self.d_sum = tf.summary.merge([d_loss_real_sum, d_loss_sum])
         self.q_sum = tf.summary.merge([q_loss_sum, q_disc_sum, q_cont_sum])
 
-    def train(self):
+    def train(self): # executation for graph
 
         # initialize all variables
         tf.global_variables_initializer().run()
@@ -220,7 +230,7 @@ class infoGAN(object):
                 batch_images = self.data_X[idx*self.batch_size:(idx+1)*self.batch_size]
 
                 # generate code
-                if self.SUPERVISED == True:
+                if self.SUPERVISED == True: # use MNIST existing labels
                     batch_labels = self.data_y[idx * self.batch_size:(idx + 1) * self.batch_size]
                 else:
                     batch_labels = np.random.multinomial(1,
