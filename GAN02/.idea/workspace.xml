@@ -11,7 +11,7 @@
   </component>
   <component name="FileEditorManager">
     <leaf>
-      <file leaf-file-name="infoGAN.py" pinned="false" current-in-tab="true">
+      <file leaf-file-name="infoGAN.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/infoGAN.py">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="277">
@@ -41,7 +41,7 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="ops.py" pinned="false" current-in-tab="false">
+      <file leaf-file-name="ops.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/ops.py">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="330">
@@ -162,6 +162,13 @@
     <option name="myLimit" value="2678400000" />
   </component>
   <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/infoGAN.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="277">
+          <caret line="338" column="36" lean-forward="true" selection-start-line="338" selection-start-column="36" selection-end-line="338" selection-end-column="36" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/main.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="653">
@@ -183,13 +190,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="330">
           <caret line="28" column="54" lean-forward="true" selection-start-line="28" selection-start-column="54" selection-end-line="28" selection-end-column="54" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/infoGAN.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="277">
-          <caret line="338" column="36" lean-forward="true" selection-start-line="338" selection-start-column="36" selection-end-line="338" selection-end-column="36" />
         </state>
       </provider>
     </entry>
